@@ -604,7 +604,7 @@ Compress_Data_2020 <- function(s_n = s_n, CompMethod = CompMethod, Partitions = 
 #' Compress large multi-block objects.
 #'
 #' Internal function of ComDim_PCA().
-#' @param s_n. The multi-block object.
+#' @param s_n The multi-block object.
 #' @param Partitions The number of partitions.
 #' @param CompMethod It can be 'Normal' (default), 'Kernel', 'PCT', 'Tall' or 'Wide'.
 #' @param Partitions The number of partitions.
