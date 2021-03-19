@@ -10,6 +10,7 @@ To successfully extract all the potential of the ComDim method, 3 functions code
 * __BuildMultiBlock.R__: To merge several single data-blocks into a multi-block data set. 
 * __splitRB.R__: To split one or more blocks into several smaller blocks, corresponding each new block to one batch.
 * __comdim_PCA.R__: This function applies the ComDim algorithm on the multi-block object resulting from __BuildMultiBlock.R__ or from __splitRB.R__.
+
 For more information on the usage of these functions, please consult the __tutorial__ from the __docs__ folder.
 
 ## Install and load R.ComDim package
