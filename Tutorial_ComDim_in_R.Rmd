@@ -1,0 +1,746 @@
+---
+title: "ComDim_PCA in R"
+author: "Francesc Puig-Castellví"
+date: "19/03/2021"
+output:
+  pdf_document:
+    number_sections: yes
+    toc: yes
+    toc_depth: 4
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+\newpage
+
+# Quick start
+
+```{r quick, echo = TRUE, message = FALSE}
+
+  # Install R.ComDim package
+  if (!require("devtools")) install.packages("devtools")
+  library("devtools")
+  install_github("f-puig/R.ComDim")
+  
+  # Load R.ComDim
+  library("R.ComDim")
+
+  # Load the data
+  # (For this quick example, it is simulated)
+  ## Block 1: Matrix of 10 rows and 50 columns, all from the same batch.
+  b1 = matrix(rnorm(500),10,50)
+  batch_b1 = rep(1,10)
+  ## Block 2: Matrix of 30 rows and 80 columns, from three different batches.   
+  b2 = matrix(rnorm(800),30,80)
+  batch_b2 = c(rep(1,10),rep(2,10),rep(3,10))
+
+  # Generate the multi-block (mb)
+  ## mb is created from b1.
+  mb <- BuildMultiBlock(b1, batches = batch_b1)   
+  ## b2 is added to mb.
+  mb <- BuildMultiBlock(b2, growingMB = mb, batches = batch_b2, equalSampleNumber = FALSE)
+    
+  # Split the each block from mb into smaller blocks (one per batch).
+  # These smaller blocks are the replicate blocks (rb).
+  rb <- splitRB(mb)
+  
+  # Do ComDim
+  results<-comdim_PCA(rb, 2) # In this analysis, we used 2 components.
+  
+```
+
+\newpage
+
+# Introduction
+
+This is a guide on how to apply ComDim under the R environment.
+
+ComDim is a chemometric method for the analysis of multi-block data sets.
+
+To successfully extract all the potential of the ComDim method, 3 functions programmed in R are proposed in this tutorial:
+
+* __BuildMultiBlock.R__: To merge several single data-blocks into a multi-block data set. 
+* __splitRB.R__: To split one or more blocks into several smaller blocks, corresponding each new block to one batch.
+* __comdim_PCA.R__: This function applies the ComDim algorithm on the multi-block object resulting from __BuildMultiBlock.R__ or from __splitRB.R__.
+
+This guide aims to reflect all the capabilities of the three functions. Please read the _Quick Guide_ from the previous section for a rapid start. To know more about the versitality of the functions and how to represent the results, continue reading this guide.
+
+# Install and load R.ComDim
+
+Install the package from GitHub and load it to the working directory:
+
+```{r install, echo = TRUE}
+  if (!require("devtools")) install.packages("devtools")
+  library("devtools")
+  install_github("f-puig/R.ComDim")
+  
+  # Load R.ComDim
+  library("R.ComDim")
+```
+
+# Building the Multi-Blocks (MBs)
+
+The multi-block object can be built by adding one block at a time with __BuildMultiBlock.R__.
+
+In this guide's example, we will build the multi-block object from the following data:
+```{r input_data, echo=TRUE}
+# Block 1: Matrix of 10 rows and 50 columns, filled with random values.
+ b1 = matrix(rnorm(500),10,50)
+# Block 2: Matrix of 10 rows and 80 columns, filled with random values.
+ b2 = matrix(rnorm(800),10,80)
+# Block 3: Matrix of 10 rows and 70 columns, filled with random values.
+ b3 = matrix(rnorm(700),10,70)
+
+```
+
+These three blocks are stored into the object named __mb__:
+```{r build_multiblock1, echo=TRUE}
+mb <- BuildMultiBlock(b1)                 # mb is created from b1.
+mb <- BuildMultiBlock(b2, growingMB = mb) # b2 is added to the existing mb object.
+mb <- BuildMultiBlock(b3, growingMB = mb) # b3 is added to the existing mb object.
+str(mb) # To show the content of mb
+```
+
+The __mb__ object is a "list of lists" (or "nested list") that contains 3 elements: the blocks __b1__, __b2__, and __b3__. Then, at the same time, these blocks contain 3 elements: __Data__ (the matrix values), __Variables__ (the variable names), and __Samples__ (the sample names).
+
+Here are some ways to consult the content of __mb__.
+
+```{r consult_fields, echo=TRUE}
+ str(mb[[1]])                             # To overview of b1
+ mb[[2]]$Data                             # To Check values in b2 matrix
+ mb[['b2']]$Data                          # I can subset by the block's name.
+ mb[[3]]$Variables                        # To check variable names in b3
+ mb[['b3']]$Samples                       # To Check sample names in b3 
+```
+
+As shown above, since we did not provide nor the *variable names* nor the *sample names* in this example, this information was filled with their indexes.
+However, if available, it can be added by using the parameters __newVars__ and __newSamples__.
+
+Let's start again.
+
+```{r build_multiblock2, echo=TRUE}
+# Samples are named s1-s10, and variables are named v1-v50.
+mb <- BuildMultiBlock(b1, newSamples = paste0('s',rep(1:5,2)),newVars = paste0('v',1:50))
+# I don't need to fill these parameters for all the blocks.
+mb <- BuildMultiBlock(b2, growingMB = mb) 
+# Here I have only provided the sample names.
+mb <- BuildMultiBlock(b3, growingMB = mb, newSamples = mb$b1$Samples)
+# To show the content of mb
+str(mb)
+```
+
+The __BuildMultiBlock.R__ function is very flexible since it accepts any other information data (ex. metadata) as long as it is of the same size as the number of samples.
+
+```{r build_multiblock3, echo=TRUE, error = TRUE}
+# The first 5 samples are from batch 1, and the remaining 5 from batch 2. Vector of length 10.
+batch = c(1,1,1,1,1,2,2,2,2,2)
+# 6 samples from batch 1, 5 from batch 2. Vector of length 11.
+batch11 = c(1,1,1,1,1,1,2,2,2,2,2)
+# Another vector of length 10.
+month = c('Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct')
+
+# This line of code will not work because batch11 is of length 11 and there are only 10 samples.
+mb <- BuildMultiBlock(b1, batches = batch11)
+
+# This line of code will works
+mb <- BuildMultiBlock(b1, batches = batch)
+# From b2 I know both the batch information and the month information.
+mb <- BuildMultiBlock(b2, growingMB = mb, batches = batch, month = month) 
+# From b3 I only know the month information
+mb <- BuildMultiBlock(b3, growingMB = mb, newSamples = mb$b1$Samples)
+
+# To show the content of mb
+str(mb) 
+```
+
+So, the multi-blocks can be always built except when there is no consistency in the data dimensions.
+This also includes the case when the different blocks to add have different sample numbers.
+
+Since __ComDim__ uses matrix concatenation in its algorithm, it is imperative that all the blocks have the same sample number. 
+
+```{r errors_multiblock0, echo=TRUE ,error = TRUE}
+# Block 4: Matrix of 11 rows and 100 columns, filled with random values.
+b4 = matrix(rnorm(1100),11,100)
+
+# This will not work because b4 is of length 11 and blocks in mb are of length 10.
+mb <- BuildMultiBlock(b4, growingMB = mb)
+```
+
+Having said this, it is still possible to build an inconsistent multi-block if the __equalSampleNumber__ is set to __FALSE__. This may be convenient when dealing with __incomplete datasets__.
+
+```{r errors_multiblock1, echo=TRUE ,error = TRUE}
+# Block 4: Matrix of 11 rows and 100 columns, filled with random values.
+b4 = matrix(rnorm(1100),11,100)
+
+# With equalSampleNumber = FALSE, we can bypass the error.
+# However, the resulting block will not be YET compatible with ComDim.
+mb <- BuildMultiBlock(b4, growingMB = mb, equalSampleNumber = FALSE)
+```
+
+
+## Error messages in BuildMultiBlock
+
+To avoid overwriting the blocks, each one should have a different names. If the name is re-used in a new block, the function will show an *error message*.
+
+```{r errors_multiblock2, echo=TRUE, error = TRUE}
+# This does not work because b4 was already added to mb
+# (in the previous section)
+mb <- BuildMultiBlock(b4, growingMB = mb)
+
+# We need to remove b4 first.
+mb<-mb[c(1:3)]
+# After that, b4 can be added.
+mb <- BuildMultiBlock(b4, growingMB = mb)
+```
+
+Additional message errors were added for __incompatible situations__:
+
+* *Inconsistence in the dimensions* of the input data:
+
+1) Between the vector of sample names and the data matrix.
+```{r errors_multiblock3, echo=TRUE, error = TRUE}
+# Block 5: Matrix of 10 rows and 15 columns, filled with random values.
+b5 = matrix(rnorm(150),10,15) 
+# Generating a sample names vector of the wrong length.
+bad_samples = seq(1,11,1)      
+
+# This will not work because the length of bad_samples is not 10
+mb <- BuildMultiBlock(b5, growingMB = mb, newSamples = bad_samples)
+```
+
+2) Between the vector of variable names and the data matrix.
+```{r errors_multiblock4, echo=TRUE, error = TRUE}
+# Block 5: Matrix of 10 rows and 15 columns, filled with random values.
+b5 = matrix(rnorm(150),10,15) 
+# Variable names vector of the wrong length.
+bad_variables = seq(12,50,1)   
+
+# This will not work because the length of bad_variables is not 15
+mb <- BuildMultiBlock(b5, growingMB = mb, newVars = bad_variables)
+```
+
+* *Wrong input format*:
+
+1) The data-block to incorporate to growingMB must be a matrix.
+```{r errors_multiblock5, echo=TRUE, error = TRUE}
+# This will not work because the block to be added must be a matrix, and mb is a list.
+mb <- BuildMultiBlock(mb, growingMB = mb)
+
+```
+
+2) And the growingMB must be a list.
+```{r errors_multiblock6, echo=TRUE, error = TRUE}
+# This does not work because the block to be added must be a matrix object.
+# The code fails to convert 'mb$b1$Data' into a suitable block name.
+mb <- BuildMultiBlock(mb$b1$Data, growingMB = mb)
+```
+
+
+# Building the Replicate Blocks (RBs)
+
+When the data in the blocks contain samples from different batches, it is possible to split each of these blocks into smaller blocks. We call these smaller blocks as __Replicate Blocks__ or __RBs__.
+
+To generate the RBs, we can simply use the __splitRB.R__ function with a multi-block object that contains the *batches* information, which must be a *numeric vector*.
+
+```{r splitRB1, echo=TRUE}
+batch = c(1,1,1,1,1,2,2,2,2,2)             # The batches information.
+mb <- BuildMultiBlock(b1, batches = batch) # We generate first the MB
+rb <- splitRB(mb)                          # We generate the RB
+str(rb)                                    # To check the content of RB
+```
+
+In the output object, __rb__, the 5 first samples (those from batch 1 according to the __batch__ vector) were split into the first RB and the 5 remaining samples (those from batch 2) were split into the second RB. 
+Moreover, the two RBs generated from b1 are named __b1_R1__ (for 'replicate 1') and __b1_R2__ (for 'replicate 2'). This is summarized in the data frame generated by the same function.
+
+In the previous example, __mb__ was composed of 1 block only. Of course, splitRB can be used with a real multi-block contaning more than 1 block.
+
+```{r splitRB, echo=TRUE}
+mb <- BuildMultiBlock(b1, batches = batch)                  # We generate first the MB
+mb <- BuildMultiBlock(b2, growingMB = mb, batches = batch)  # We add b2 to mb. 
+rb <- splitRB(mb)                                           # We generate the RB
+str(rb)                                                     # To check the content of RB
+```
+
+If some of the blocks contain metadata, these data will also be kept in the RBs.
+
+```{r splitRB3_metadata, echo=TRUE}
+temperature = paste0(seq(25,34,1),'°C')                        # Metadata
+mb <- BuildMultiBlock(b1, batches = batch, temp = temperature) # We generate first the MB
+mb <- BuildMultiBlock(b2, growingMB = mb, batches = batch)     # We add b2 to mb. 
+rb <- splitRB(mb)                                              # We generate the RB
+str(rb)                                                        # To check the content of RB
+```
+
+## Error messages in splitRB
+
+If the multi-block is NOT consistent with the output from __BuildMultiBlock.R__, the function will report an *error*:
+
+1) If the input *is not a list*.
+```{r splitRB_error1, echo=TRUE, error = TRUE}
+# It fails because the function input must be a multi-block structure, not a matrix.
+rb <- splitRB(b1)
+```
+
+2) If the input is not a nested list (*list of lists*).
+```{r splitRB_error2, echo=TRUE, error = TRUE}
+b1_list <- list(b1)
+# It fails because the list b1_list is not a nested list.
+rb <- splitRB(b1_list)
+```
+
+3) Inconsistence in the length of the __batches__ vector.
+```{r splitRB_error3, echo=TRUE, error = TRUE}
+# It fails because the length of the batch vector is different
+# from the sample number in the corresponding data.
+mb2 <- BuildMultiBlock(b1, batches = batch[1:9]) # Creating a mock multiblock
+```
+
+4) Inconsistence in the length of the __Samples__ data.
+```{r splitRB_error4, echo=TRUE, error = TRUE}
+mb2 <- BuildMultiBlock(b1, batches = batch[1:9]) # Creating a mock multiblock
+mb2$b1$Samples <- paste0('s',1:9)      # Altering the Sample names vector.
+
+# It fails because the length of the Sample names vector is different
+# from the sample number in the corresponding data.
+rb <- splitRB(mb2)
+```
+
+5) Inconsistence in the length of the __Variables__ data.
+```{r splitRB_error5, echo=TRUE, error = TRUE}
+mb2 <- BuildMultiBlock(b1, batches = batch) # Creating a mock multiblock
+mb2$b1$Variables <- paste0('v',1:9)    # Altering the Variable names vector.
+
+# It fails because the length of the Variable names vector is different
+# from the Variable number in the corresponding data.
+rb <- splitRB(mb2)
+```
+
+6) In consistence in the *number of samples across blocks*.
+```{r splitRB_error6, echo=TRUE, error = TRUE}
+mb2 <- BuildMultiBlock(b1, batches = batch) # Creating a mock multiblock
+mb2$b1$Data <-  mb2$b1$Data[1:9,]           # Altering the number of samples in data.
+mb2$b1$Batch <-  mb2$b1$Batch[1:9]          # Altering the number of samples in data.
+mb2$b1$Samples <- paste0('s',1:9)     # Altering the Sample names vector.
+
+# It fails because the sample number in batch 1 is not the same as in batch 2.
+rb <- splitRB(mb2)
+```
+
+## Sample correspondence in the splitting of the blocks
+
+So far, in all these tests, we have assumed that samples are sorted in the same order within each batch, implying a *perfectly aligned* sample correspondence across RBs (ex. sample 1 from b1_R1 corresponds to sample 6 from b1_R2, sample 2 to sample 7, and so on).
+
+However, if the sample correspondence may not be _TRUE_, then we can build the replicate blocks by checking their sample names first. This can be made by setting the _checkSampleCorrespondence_ to _TRUE_. In addition, with this additional parameter, only the samples with common names across all the blocks will be kept.
+
+```{r splitRB4_samplecorrespondence, echo=TRUE, error = TRUE}
+# There is sample correspondency for samples s1-s4, but not for s5 nor s6.
+sample_names = paste0('s',c(1,2,3,4,5,1,2,3,4,6))
+print(sample_names)
+
+mb <- BuildMultiBlock(b1, batches = batch, newSamples = sample_names) # We generate the MB
+rb <- splitRB(mb, checkSampleCorrespondence = TRUE)                   # We generate the RB
+```
+
+In case the data we are analyzing do not have replicates, this function can still be used to ensure that samples are correctly sorted across blocks.
+
+```{r splitRB5_samplecorrespondence2, echo=TRUE, error = TRUE}
+# FOR UNSORTED BLOCKS:
+batch1 = rep(1,10) # Only one batch per block.
+sample_names1 = paste0('s',c(1:10)) # Sample names for b1
+sample_names2 = paste0('s',c(10:1)) # Sample names for b2
+# There is sample correspondence, but samples do not have the same order
+
+mb <- BuildMultiBlock(b1, batches = batch1, newSamples = sample_names1) # We generate the MB
+mb <- BuildMultiBlock(b2, growingMB = mb, batches = batch1, newSamples = sample_names2) # We add b2
+rb <- splitRB(mb, checkSampleCorrespondence = TRUE)                     # Check for the common samples
+
+# FOR BLOCKS WITH PARTIAL SAMPLE CORRESPONDENCE
+sample_names1 = paste0('s',c(1:10)) # Sample names for b1
+sample_names2 = paste0('s',c(6:15)) # Sample names for b2
+# There is sample correspondence for samples s6-s10.
+
+mb <- BuildMultiBlock(b1, batches = batch1, newSamples = sample_names1) # We generate the MB
+mb <- BuildMultiBlock(b2, growingMB = mb, batches = batch1, newSamples = sample_names2) # We add b2
+rb <- splitRB(mb, checkSampleCorrespondence = TRUE)                     # Check for the common samples
+```
+
+Finally, it could occur that we have several replicates in one or more blocks, but not for all of them. This is the case for the _incomplete datasets_. In order to build a multi-block structure (and avoid getting an error due to the divergent sample size), the parameter _equalSampleNumber_ is set to _FALSE_ in _BuildMultiBlock.R_.
+
+```{r unbalanced_multiblock, echo=TRUE, error = TRUE}
+b6 = matrix(rnorm(2400),30,80) 
+  # Block 6: Matrix of 30 rows and 80 columns, filled with random values.
+batch6 = c(rep(1,10),rep(2,10),rep(3,10)) # b6 contains samples from 3 batches.
+sample_names6 = c(sample_names1, sample_names1, sample_names1)
+
+mb <- BuildMultiBlock(b1, batches = batch1, newSamples = sample_names1) # We generate the MB
+mb <- BuildMultiBlock(b6, growingMB = mb, batches = batch6,
+                      newSamples = sample_names6, equalSampleNumber = FALSE) # We add b6
+rb <- splitRB(mb)
+```
+
+# ComDim
+
+ComDim is executed using the _comdim_PCA.R_ function. This function accepts as inputs the multi-block data sets generated with _splitRB.R_ and _BuildMultiBlock.R_ (as long as their number of samples are conserved for all the blocks).
+
+In this example we will use *Dataset3*. The data from this dataset was obtained from *Gomez-Cabrero et al. (2019)*. It consists of 4 data-blocks (LC-MS, GC-MS, RNAseq, and miRNAseq), and each block contains data from 36 samples (12 samples per batch). These 12 samples correspond to 2 treatments measured at 6 different time-points.
+
+This data set was initially stored into a Matlab .mat file. To read it in *R*, we use the package *R.matlab*.
+
+```{r load_dataset3, echo=TRUE, error = TRUE}
+path = 'dataset3b.mat'
+
+if (!require("R.matlab")) install.packages("R.matlab")
+library('R.matlab')
+data3 <- readMat(path)
+lcms <- data3$dataset1b[[1]]
+gcms <- data3$dataset1b[[4]]
+rnaseq <- data3$dataset1b[[7]]
+mirnaseq <- data3$dataset1b[[10]]
+batch_d3 <- c(rep(1,12),rep(2,12),rep(3,12))
+time <- c(rep(c(0,0,2,2,4,4,6,6,10,10,24,24),3)) # Time in h.
+exposition <- rep(c(0,1),18) # Odd samples are controls 'O', even samples are exposed '1'.
+```
+
+At this stage, we can build the multi-block:
+
+```{r build_dataset3, echo=TRUE, error = TRUE}
+mb_d3 <- BuildMultiBlock(lcms, batches = batch_d3, time = time, exposition = exposition)
+mb_d3 <- BuildMultiBlock(gcms, growingMB = mb_d3, batches = batch_d3,
+                         time = time, exposition = exposition)
+mb_d3 <- BuildMultiBlock(rnaseq, growingMB = mb_d3, batches = batch_d3,
+                         time = time, exposition = exposition)
+mb_d3 <- BuildMultiBlock(mirnaseq, growingMB = mb_d3, batches = batch_d3,
+                         time = time, exposition = exposition)
+rb_d3 <- splitRB(mb_d3)
+```
+
+Finally, _ComDim_ can be run:
+
+```{r run_ComDim, echo=TRUE, error = TRUE}
+results <- comdim_PCA(data = rb_d3, 4) # We will calculate 4 components.
+```
+
+Several sets of information are obtained from the _ComDim_ analysis:
+
+```{r results_ComDim, echo=TRUE, error = TRUE}
+names(results)
+```
+
+We will focus now on the most important results: the _saliences_, the global scores ( _Q_ ), the local scores ( _T_Loc_ ), the loadings ( _P_ ), and percentage of the explained variance ( _explained_ ).
+
+# Explained variance
+
+This result gives the relative variance of the data set explained for every component.
+
+```{r explained, echo=TRUE, error = TRUE}
+if (!require("ggplot2")) install.packages("ggplot2")
+library(ggplot2)
+df <- data.frame(Components= names(results$explained$Data),
+                Explained = results$explained$Data)
+ggplot(data=df, aes(x=Components, y=Explained)) +
+  geom_bar(stat="identity", width=0.5)  +
+    ggtitle("Explained variance")
+```
+
+The _1st_ component (or _CC1_) explains *40% of the data set variance*, while the _4th_ component (or _CC4_) only explains approximately the *10% of the data set variance*.
+
+# Saliences
+
+By looking at the saliences, we can evaluate the importance of each block in the model.
+
+```{r saliences, echo=TRUE, error = TRUE}
+if (!require("ggplot2")) install.packages("ggplot2")
+if (!require("tidyr")) install.packages("tidyr")
+if (!require("dplyr")) install.packages("dplyr")
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+
+df <- data.frame(rownames(results$saliences$Data),results$saliences$Data, stringsAsFactors = FALSE)
+colnames(df) <- c('Block','CC1','CC2','CC3','CC4')
+
+df2 <- df %>% 
+  pivot_longer(!Block, names_to = 'Component', values_to = 'Salience')
+
+ggplot(data = df2, aes(x = Block, y = Salience, fill = Component)) +
+    geom_bar(stat = "identity", position = position_dodge()) +
+    theme(axis.text.x = element_text(angle = 90)) +
+    ggtitle("Saliences")
+```
+
+We can see that the _1st_ replicate blocks ( _RB1_) of the GCMS and LCMS data are mainly explained by _CC3_ in cyan, the _RB2_ of the same data type for _CC4_, and the _RB3_ for _CC2_. This denotes a batch effect *common* across the *LCMS* and *GCMS* data. On the other hand, _CC1_ is mostly descriptive of the *RNAseq* and *miRNAseq* data.
+
+# Global scores
+
+The _Global scores_ show the trend of the samples *common across all the blocks*.
+
+```{r Q, echo=TRUE, error = TRUE}
+library(ggplot2)
+library(gridExtra)
+
+df_Q1 <- data.frame(Q = results$Q$Data[,1],
+                Time = results$Q$time,
+                Exposition = as.factor(results$Q$exposition))
+
+df_Q2 <- data.frame(Q = results$Q$Data[,2],
+                Time = results$Q$time,
+                Exposition = as.factor(results$Q$exposition))
+
+df_Q3 <- data.frame(Q = results$Q$Data[,3],
+                Time = results$Q$time,
+                Exposition = as.factor(results$Q$exposition))
+
+df_Q4 <- data.frame(Q = results$Q$Data[,4],
+                Time = results$Q$time,
+                Exposition = as.factor(results$Q$exposition))
+
+p1 <- ggplot(data=df_Q1, aes(x=Time, y=Q, group=Exposition)) +
+  geom_line(aes(color=Exposition))+
+  geom_point(aes(color=Exposition))+
+  labs(x = "Time (in h)", title = "Scores in CC1")
+
+p2 <- ggplot(data=df_Q2, aes(x=Time, y=Q, group=Exposition)) +
+  geom_line(aes(color=Exposition))+
+  geom_point(aes(color=Exposition))+
+  labs(x = "Time (in h)", title = "Scores in CC2")
+
+p3 <- ggplot(data=df_Q3, aes(x=Time, y=Q, group=Exposition)) +
+  geom_line(aes(color=Exposition))+
+  geom_point(aes(color=Exposition))+
+  labs(x = "Time (in h)", title = "Scores in CC3")
+
+p4 <- ggplot(data=df_Q4, aes(x=Time, y=Q, group=Exposition)) +
+  geom_line(aes(color=Exposition))+
+  geom_point(aes(color=Exposition))+
+  labs(x = "Time (in h)", title = "Scores in CC4")
+
+grid.arrange(p1, p2, p3, p4, nrow = 2)
+```
+
+In _CC1_, an increase over time in is observed for the exposed samples.
+
+# Local scores
+
+The _Local scores_ show the trend of the samples *for each block*.
+For this example, we only work with _CC1_.
+
+```{r T_Loc, echo=TRUE, error = TRUE}
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+
+df <- data.frame(results$T_Loc$Data[[1]][,1],
+                 results$T_Loc$Data[[2]][,1],
+                 results$T_Loc$Data[[3]][,1],
+                 results$T_Loc$Data[[4]][,1],
+                 results$T_Loc$Data[[5]][,1],
+                 results$T_Loc$Data[[6]][,1],
+                 results$T_Loc$Data[[7]][,1],
+                 results$T_Loc$Data[[8]][,1],
+                 results$T_Loc$Data[[9]][,1],
+                 results$T_Loc$Data[[10]][,1],
+                 results$T_Loc$Data[[11]][,1],
+                 results$T_Loc$Data[[12]][,1],
+                Time = results$Q$time,
+                Exposition = as.factor(results$Q$exposition))
+colnames(df) <- c(paste0('gcms',1:3), paste0('lcms',1:3),
+                  paste0('RNAseq',1:3), paste0('miRNAseq',1:3),'Time','Exposition')
+
+df2 <- df %>% 
+  pivot_longer(cols = -c('Time','Exposition'), #These columns are extracted as they are.
+               names_to = 'Block', # The new column to be created.
+               names_pattern = "([a-zA-Z]+)", # Remove characters
+               values_to = 'Scores_value')
+
+ggplot(data=df2, aes(x=Time, y=Scores_value, shape = Block, color = Exposition)) +
+  geom_point()+
+  labs(x = "Time (in h)") +
+  ggtitle("Scores in CC1")
+```
+
+This analysis revealed not to be very useful since there is too much data plotted together.
+So, in the following section, we will plot the data from each block separately.
+Also, in the same plots we will overlay the _Global scores_ to compare the global and the local trend.
+
+# Global and Local scores
+
+The _Global scores_ show the common trend of the samples *to all the blocks*.
+For this example, we only work with _CC1_.
+
+```{r T_Loc2, echo=TRUE, error = TRUE, fig.height = 10}
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(gridExtra)
+
+df <- list()
+df2 <- list()
+p2 <- list()
+
+for(i in 1:12){
+  df[[i]] <- data.frame(T_Loc = results$T_Loc$Data[[i]][,1],
+                Q = results$Q$Data[,1],
+                Time = results$Q$time,
+                Exposition = as.factor(results$Q$exposition))
+
+  df2[[i]] <- df[[i]] %>% 
+        pivot_longer(cols = -c('Time','Exposition'), #These columns are extracted as they are.
+               names_to = 'Global_Local', # The new column to be created.
+               values_to = 'Scores_value')
+  
+  p2[[i]] <- ggplot(data=df2[[i]], aes(x=Time, y=Scores_value,
+        linetype = Global_Local,
+        shape = Global_Local,
+        color = Exposition)) +
+        geom_point() +
+        geom_line() +
+        labs(x = "Time (in h)", y = "Scores in CC1", title = sprintf("Block %s",i))
+}
+
+grid.arrange(p2[[1]],p2[[2]],p2[[3]],p2[[4]],
+             p2[[5]],p2[[6]],p2[[7]],p2[[8]],
+             p2[[9]],p2[[10]],p2[[11]],p2[[12]], nrow = 6)
+```
+
+Now, we can see easily that the _Local Scores_ that better matches the _Global scores_ are the RNAseq (blocks 7-9) and the miRNAseq (blocks 10-12). Having said this, the evolution of the two types of metabolomics data is also very close to the _Global scores_.
+
+# Loadings
+
+The _Loadings_ show the contributions of each of the *variables* to the global model.
+In this example, we compare the loadings for the 3 miRNAseq blocks in CC1
+
+```{r loadings, echo=TRUE, error = TRUE}
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+
+df <- data.frame(miRNAseq1 = results$P_Loc$Data[[10]][,1], # CC1 from block 10
+                 miRNAseq2 = results$P_Loc$Data[[11]][,1], # CC1 from block 11
+                 miRNAseq3 = results$P_Loc$Data[[12]][,1], # CC1 from block 12
+                 variables = seq(1,length(results$P_Loc$Data[[10]][,1]),1))
+
+df2 <- df %>% 
+  pivot_longer(cols = -c('variables'), names_to = 'miRNAseq',
+               names_prefix = "miRNAseq", values_to = 'Loadings')
+
+ggplot(data = df2, aes(x = variables, y = Loadings, col = miRNAseq)) +
+    geom_segment(aes(variables,Loadings,xend=variables,yend=Loadings-Loadings)) +
+    geom_point(aes(variables,Loadings),size=1) +
+    geom_hline(aes(yintercept=0)) +
+    ggtitle("Loadings")
+```
+
+We can appreciate a good correspondence of the loadings across the 3 miRNAseq blocks.
+
+# Additional settings for ComDim
+
+## Loquace
+
+For long computations, it is possible to display the progress of the _ComDim_ analysis by setting the _loquace_ parameter to _TRUE_.
+
+```{r loquace, echo=TRUE, error = TRUE}
+results <- comdim_PCA(data = rb_d3, 4, loquace = TRUE) # We will display the computational time.
+```
+
+## Normalise
+
+In the default settings, the data blocks are mean-centered and norm-scaled before the iteration process of determining the global scores and saliences. These two pre-processings can be omitted by setting _normalise_ to _FALSE_. Having said this, for most of the times, the best results are obtained with _normalise = TRUE_.
+
+```{r normalise, echo=TRUE, error = TRUE}
+results <- comdim_PCA(data = rb_d3, 4, normalise = FALSE)
+  # The MB data is not mean-centered nor norm-scaled inside the ComDim routine.
+
+# Plot of the Global scores
+library(ggplot2)
+library(gridExtra)
+
+df_Q1 <- data.frame(Q = results$Q$Data[,1],
+                Time = results$Q$time,
+                Exposition = as.factor(results$Q$exposition))
+
+df_Q2 <- data.frame(Q = results$Q$Data[,2],
+                Time = results$Q$time,
+                Exposition = as.factor(results$Q$exposition))
+
+df_Q3 <- data.frame(Q = results$Q$Data[,3],
+                Time = results$Q$time,
+                Exposition = as.factor(results$Q$exposition))
+
+df_Q4 <- data.frame(Q = results$Q$Data[,4],
+                Time = results$Q$time,
+                Exposition = as.factor(results$Q$exposition))
+
+p1 <- ggplot(data=df_Q1, aes(x=Time, y=Q, group=Exposition)) +
+  geom_line(aes(color=Exposition))+
+  geom_point(aes(color=Exposition))+
+  labs(x = "Time (in h)", title = "Scores in CC1")
+
+p2 <- ggplot(data=df_Q2, aes(x=Time, y=Q, group=Exposition)) +
+  geom_line(aes(color=Exposition))+
+  geom_point(aes(color=Exposition))+
+  labs(x = "Time (in h)", title = "Scores in CC2")
+
+p3 <- ggplot(data=df_Q3, aes(x=Time, y=Q, group=Exposition)) +
+  geom_line(aes(color=Exposition))+
+  geom_point(aes(color=Exposition))+
+  labs(x = "Time (in h)", title = "Scores in CC3")
+
+p4 <- ggplot(data=df_Q4, aes(x=Time, y=Q, group=Exposition)) +
+  geom_line(aes(color=Exposition))+
+  geom_point(aes(color=Exposition))+
+  labs(x = "Time (in h)")+
+  labs(x = "Time (in h)", title = "Scores in CC4")
+
+grid.arrange(p1, p2, p3, p4, nrow = 2)
+```
+
+In this case, we did not observe many differences since the 4 data-blocks were already pre-processed (SNV-normalised and mean-centered).
+
+
+## CompMethod and Partitions
+
+For large matrices, it is possible to speed up the analysis with the parameters _CompMethod_ and _Partitions_. 
+
+```{r partitions, echo=TRUE, error = TRUE}
+running_time <- as.vector(NULL)
+results <- comdim_PCA(data = rb_d3, 4)
+running_time[1] <- results$runtime
+results <- comdim_PCA(data = rb_d3, 4, Partitions = 3)
+running_time[2] <- results$runtime
+results <- comdim_PCA(data = rb_d3, 4, CompMethod = 'Kernel')
+running_time[3] <- results$runtime
+results <- comdim_PCA(data = rb_d3, 4, CompMethod = 'PCT')
+running_time[4] <- results$runtime
+results <- comdim_PCA(data = rb_d3, 4, CompMethod = 'Kernel', Partitions = 3)
+running_time[5] <- results$runtime
+results <- comdim_PCA(data = rb_d3, 4, CompMethod = 'PCT', Partitions = 3)
+running_time[6] <- results$runtime
+results <- comdim_PCA(data = rb_d3, 4, CompMethod = 'Wide')
+running_time[7] <- results$runtime
+#results <- comdim_PCA(data = rb_d3, 4, loquace = TRUE, CompMethod = 'Tall')
+    # Not recommended when the number of variables in a block is very large
+    # As for the RNAseq blocks here.
+
+#running_time[8] <- results$runtime
+
+library(ggplot2)
+df <- data.frame(Tests = c('Normal','Normal_3P','Kernel','PCT','Kernel_3P','PCT_3P','Wide'),
+                 Time = running_time,
+                 stringsAsFactors = FALSE)
+
+ggplot(data=df, aes(x = Tests, y = running_time)) +
+  geom_bar(stat="identity", width=0.5) +
+  scale_x_discrete(limits=df$Tests) +
+  labs(y = "Time (in seconds)", x='ComDim Methods') +
+  ggtitle("Computational time") +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+# References
+* Gomez-Cabrero, D.; Tarazona, S.; Ferreirós-Vidal, I.; Ramirez, R. N.; Company, C.; Schmidt, A.; Reijmers, T.; Paul, V. von Saint; Marabita, F.; Rodríguez-Ubreva, J.; Garcia-Gomez, A.; Carroll, T.; Cooper, L.; Liang, Z.; Dharmalingam, G.; van der Kloet, F.; Harms, A. C.; Balzano-Nogueira, L.; Lagani, V.; Tsamardinos, I.; Lappe, M.; Maier, D.; Westerhuis, J. A.; Hankemeier, T.; Imhof, A.; Ballestar, E.; Mortazavi, A.; Merkenschlager, M.; Tegner, J.; Conesa, A. STATegra, a Comprehensive Multi-Omics Dataset of B-Cell Differentiation in Mouse. Sci. data 2019, 6 (1), 256. https://doi.org/10.1038/s41597-019-0202-7.
+* Puig-Castellví, F.; Jouan-Rimbaud Bouveresse, D.; Mazéas, L.; Chapleur, O.; Rutledge*, D. N. Rearrangement of incomplete multi-omics datasets combined with ComDim for evaluating replicate cross-platform variability and batch influence. Under revision. 
+* Qannari, E. M.; Courcoux, P.; Vigneau, E. Common Components and Specific Weights Analysis Performed on Preference Data. Food Qual. Prefer. 2001, 12 (5–7), 365–368. https://doi.org/10.1016/S0950-3293(01)00026-X.
+* Mazerolles, G.; Hanafi, M.; Dufour, E.; Bertrand, D.; Qannari, E. M. Common Components and Specific Weights Analysis: A Chemometric Method for Dealing with Complexity of Food Products. Chemom. Intell. Lab. Syst. 2006, 81 (1), 41–49. https://doi.org/10.1016/J.CHEMOLAB.2005.09.004.
+* Claeys-Bruno, M.; Béal, A.; Rutledge, D. N.; Sergent, M. Use of the Common Components and Specific Weights Analysis to Interpret Supersaturated Designs. Chemom. Intell. Lab. Syst. 2016, 152, 97–106. https://doi.org/10.1016/j.chemolab.2016.01.014.
