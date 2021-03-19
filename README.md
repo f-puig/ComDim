@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.com/f-puig/R.ComDim.svg?branch=main)](https://travis-ci.com/f-puig/R.ComDim)
+
 # ComDim for evaluating replicate cross-platform variability and batch influence
 
 ## Introduction: the ComDim method
