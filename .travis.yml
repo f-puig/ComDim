@@ -1,4 +1,2 @@
 language: r
-r_packages: 
-    - utils
-    - pracma
+r_packages: pracma
