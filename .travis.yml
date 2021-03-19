@@ -1,2 +1,4 @@
 language: r
 r_packages: pracma
+after_failure:
+    - ./travis-tool.sh dump_logs
