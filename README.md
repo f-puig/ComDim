@@ -6,10 +6,11 @@
 ComDim (also known as CCSWA) is an unsupervised multi-block method that aims to simultaneously consider multiple data tables to find the latent components that are common to all the tables as well as those that are specific to each data table, along with the contribution of each of the tables to each of these components. ComDim determines a common space describing the dispersion of the samples in all the blocks, each block having a specific weight (__salience__) associated with each dimension in this common space. Significant differences in the saliences for a given dimension reflect the fact that the dimension contains different amounts of information coming from each block. In addition to the saliences, __Local loadings__ for each analyzed block and two different sets of scores are obtained. The first set corresponds to the __Local scores__ for each analyzed block while the second set is composed of the __Global scores__, common to all the blocks.
 
 ## Functions
-To successfully extract all the potential of the ComDim method, 3 functions coded in R are proposed:
-* __BuildMultiBlock.R__: To merge several single data-blocks into a multi-block data set. 
-* __splitRB.R__: To split one or more blocks into several smaller blocks, corresponding each new block to one batch.
-* __comdim_PCA.R__: This function applies the ComDim algorithm on the multi-block object resulting from __BuildMultiBlock.R__ or from __splitRB.R__.
+To successfully extract all the potential of the ComDim method, several functions coded in R are proposed:
+* __BuildMultiBlock()__: To merge several single data-blocks into a multi-block data set. 
+* __SplitRB()__: To split one or more blocks into several smaller blocks, corresponding each new block to one batch.
+* __ComDim_PCA()__: This function applies the ComDim algorithm on the multi-block object resulting from __BuildMultiBlock()__ or from __SplitRB()__.
+* __SelectFeaturesRB()__: To find the important variables according to ComDim.
 
 For more information on the usage of these functions, please consult the __tutorial__ from the __docs__ folder.
 
