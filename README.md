@@ -7,7 +7,7 @@ ComDim (also known as CCSWA) is an unsupervised multi-block method that aims to 
 
 ## Why should I use ComDim?
 * To analyze __different types of data__ (ex. multi-omics) and see how they are untangled.
-* To deal with __unbalanced multi-block__ datasets (ex. different number of sample replicates in the blocks).
+* To deal with __unbalanced multi-block__ datasets (ex. different number of sample replicates in the blocks). However, ComDim can also deal with __balanced multi-block__ datasets.
 * Within the data from the same analytical platform, to evaluate __inter-sample variability__ and __batch effects__ related to the analytical platform.
 * To investigate __cross-platform variability__, which is useful to detect errors in the sample preparation.
 
