@@ -14,9 +14,9 @@ ComDim (also known as CCSWA) is an unsupervised multi-block method that aims to 
 ## Functions
 To successfully extract all the potential of the ComDim method, several functions coded in R are proposed:
 * __BuildMultiBlock()__: To merge several single data-blocks into a multi-block data set. 
-* __SplitRB()__: To split one or more blocks into several smaller blocks, corresponding each new block to one batch.
-* __ComDim_PCA()__: This function applies the ComDim algorithm on the multi-block object resulting from __BuildMultiBlock()__ or from __SplitRB()__.
-* __SelectFeaturesRB()__: To find the important variables according to ComDim.
+* __SplitRW()__: To split one or more blocks into several smaller blocks, corresponding each new block to one batch.
+* __ComDim_PCA()__: This function applies the ComDim algorithm on the multi-block object resulting from __BuildMultiBlock()__ or from __SplitRW()__.
+* __SelectFeaturesRW()__: To find the important variables according to ComDim.
 
 For more information on the usage of these functions, please consult the __tutorial__ from the __docs__ folder.
 
